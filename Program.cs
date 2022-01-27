@@ -8,18 +8,28 @@ using static options;
 
 var rand = new Random();
 
-using (var context = new BucketExponentStoringDbContext())
+using (var context = new TimestampedDbContext())
 {
     context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
-    for (int i = 0; i < 3332; i++)
+    for (int i = 0; i < 333; i++)
     {
-        int bucketExponent = GetBucketExponent(context.BucketExponentStoringBucketedEntities.Count());
-        context.Add(new BucketExponentStoringBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+        int bucketExponent = GetBucketExponent(context.TimestampedBucketedEntity.Count());
+        var count = context.TimestampedBucketedEntity.Count();
+        if(GetBucketExponent(count) != GetBucketExponent(count - 1)){
+            foreach(var v in context.TimestampedBucketedEntity){
+                v.EmailAddress = v.EmailAddress;
+                v.BucketNo = new BucketedEntity(v.EmailAddress, bucketExponent).BucketNo;
+                v.EmailUpdated = DateTime.UtcNow;
+            }
+        }
+        context.Add(new TimestampedBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
         context.SaveChanges();
     }
 }
 
+
+/* Fetch from bucketexponentstoringdbcontext
 
 using (var context = new BucketExponentStoringDbContext())
 using (var context2 = new BucketExponentStoringDbContext())
@@ -34,7 +44,7 @@ using (var context3 = new BucketExponentStoringDbContext())
         Console.WriteLine($"Others: {context2.BucketExponentStoringBucketedEntities.Where(_ => bucketNumbers.Contains(_.BucketNo)).Count()}");
 
     }
-}
+}*/
 
 // DbContexts
 public static class options
@@ -121,7 +131,26 @@ public class BucketExponentStoringDbContext : DbContext{
         }
         );
     }
+}
 
+public class TimestampedDbContext : DbContext{
+    public DbSet<TimestampedBucketedEntity> TimestampedBucketedEntity { get; set; }
+    public TimestampedDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<TimestampedBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailUpdated).ValueGeneratedOnAddOrUpdate();
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
 }
 
 // Entities
