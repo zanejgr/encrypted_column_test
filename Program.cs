@@ -6,30 +6,33 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using static NonCryptographicHelpers;
 using static options;
 
-int bucketExponent = GetBucketExponent(32);
 var rand = new Random();
-Console.WriteLine($"BucketExponent: {bucketExponent}");
 
-using (var context = new BucketedEncryptedDbContext())
+using (var context = new BucketExponentStoringDbContext())
 {
     context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 3332; i++)
     {
-        context.Add(new BucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+        int bucketExponent = GetBucketExponent(context.BucketExponentStoringBucketedEntities.Count());
+        context.Add(new BucketExponentStoringBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+        context.SaveChanges();
     }
-    context.SaveChanges();
 }
 
 
-using (var context = new BucketedEncryptedDbContext())
-using (var context2 = new BucketedEncryptedDbContext())
+using (var context = new BucketExponentStoringDbContext())
+using (var context2 = new BucketExponentStoringDbContext())
+using (var context3 = new BucketExponentStoringDbContext())
 {
-    foreach (var v in context.BucketedEntities)
+    var exponents = context3.BucketExponentStoringBucketedEntities.Select(_ => _.BucketExponent).Distinct().ToList();
+    foreach (var v in context.BucketExponentStoringBucketedEntities)
     {
+        var bucketNumbers = exponents.Select(_ => new BucketedEntity(v.EmailAddress, _).BucketNo);
         Console.WriteLine($"EmailAddress: {v.EmailAddress}");
         Console.WriteLine($"BucketNo: {v.BucketNo}");
-        Console.WriteLine($"Others: {context2.BucketedEntities.Where(_ => _.BucketNo == v.BucketNo).Count()}");
+        Console.WriteLine($"Others: {context2.BucketExponentStoringBucketedEntities.Where(_ => bucketNumbers.Contains(_.BucketNo)).Count()}");
+
     }
 }
 
@@ -246,7 +249,8 @@ public static class NonCryptographicHelpers
 {
     public static int GetBucketExponent(int userCount)
     {
-        return (int)Math.Floor(Math.Log2(userCount)) - 3;
+        if (userCount < 1) { return 1; }
+        return Math.Max((int)Math.Floor(Math.Log2(userCount)) - 3, 1);
     }
 }
 
