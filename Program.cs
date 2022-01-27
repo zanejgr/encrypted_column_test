@@ -7,7 +7,20 @@ using static NonCryptographicHelpers;
 using static options;
 
 var rand = new Random();
+        int bucketExponent = GetBucketExponent(333);
+using (var context = new RowCountedBucketedDbContext())
+{
+    context.Database.EnsureDeleted();
+    context.Database.EnsureCreated();
+    for (int i = 0; i < 333; i++)
+    {
+        context.Add(new RowCountedBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+    }
+    context.SaveChanges();
+}
 
+
+/* save to TimestampedDbContext
 using (var context = new TimestampedDbContext())
 {
     context.Database.EnsureDeleted();
@@ -27,7 +40,7 @@ using (var context = new TimestampedDbContext())
         context.SaveChanges();
     }
 }
-
+*/
 
 /* Fetch from bucketexponentstoringdbcontext
 
@@ -52,8 +65,6 @@ public static class options
     public static string conn = "server=localhost;port=3306;database=tmp;uid=devuser;pwd=Pa55w0rd!";
     public static ServerVersion srvvrs = ServerVersion.Parse("8.0.27-mysql");
 }
-
-
 public class UnencryptedDbContext : DbContext
 {
     public DbSet<BasicEntity> BasicEntities { get; set; }
@@ -106,6 +117,28 @@ public class BucketedEncryptedDbContext : DbContext
             e.HasIndex(e => e.EmailAddress)
             .IsUnique();
             e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+public class RowCountedBucketedDbContext : DbContext
+{
+    public DbSet<RowCountedBucketedEntity> RowCountedBucketedEntities { get; set; }
+    public RowCountedBucketedDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RowCountedBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.HasAlternateKey(e => e.EntryNo);
+            e.Property(e => e.EntryNo).ValueGeneratedOnAdd();
             e.Property(e => e.EmailAddress)
             .IsRequired().HasConversion<PersonalDataConverter>();
         }
