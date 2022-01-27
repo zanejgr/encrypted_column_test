@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using static options;
 
 
-using (var context = new UnencryptedDbContext())
+using (var context = new BasicEncryptedDbContext())
 {
     context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
@@ -15,7 +15,7 @@ using (var context = new UnencryptedDbContext())
 }
 
 
-using (var context = new UnencryptedDbContext())
+using (var context = new BasicEncryptedDbContext())
 {
     foreach (var v in context.BasicEntities)
     {
@@ -42,10 +42,10 @@ public class UnencryptedDbContext : DbContext
     {
         modelBuilder.Entity<BasicEntity>(e =>
         {
-             e.HasIndex(e => e.EmailAddress)
-             .IsUnique();
-             e.Property(e => e.EmailAddress)
-             .IsRequired();
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.Property(e => e.EmailAddress)
+            .IsRequired();
         }
         );
     }
@@ -55,6 +55,7 @@ public class BasicEncryptedDbContext : DbContext
 
     public DbSet<BasicEntity> BasicEntities { get; set; }
     public BasicEncryptedDbContext() : base() { }
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
