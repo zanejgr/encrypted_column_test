@@ -3,23 +3,33 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using static NonCryptographicHelpers;
 using static options;
 
+int bucketExponent = GetBucketExponent(32);
+var rand = new Random();
+Console.WriteLine($"BucketExponent: {bucketExponent}");
 
-using (var context = new BasicEncryptedDbContext())
+using (var context = new BucketedEncryptedDbContext())
 {
     context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
-    context.Add(new BasicEntity());
+    for (int i = 0; i < 32; i++)
+    {
+        context.Add(new BucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+    }
     context.SaveChanges();
 }
 
 
-using (var context = new BasicEncryptedDbContext())
+using (var context = new BucketedEncryptedDbContext())
+using (var context2 = new BucketedEncryptedDbContext())
 {
-    foreach (var v in context.BasicEntities)
+    foreach (var v in context.BucketedEntities)
     {
-        Console.WriteLine(v.EmailAddress);
+        Console.WriteLine($"EmailAddress: {v.EmailAddress}");
+        Console.WriteLine($"BucketNo: {v.BucketNo}");
+        Console.WriteLine($"Others: {context2.BucketedEntities.Where(_ => _.BucketNo == v.BucketNo).Count()}");
     }
 }
 
@@ -69,6 +79,48 @@ public class BasicEncryptedDbContext : DbContext
     }
 }
 
+public class BucketedEncryptedDbContext : DbContext
+{
+    public DbSet<BucketedEntity> BucketedEntities { get; set; }
+    public BucketedEncryptedDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<BucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
+public class BucketExponentStoringDbContext : DbContext{
+    public DbSet<BucketExponentStoringBucketedEntity> BucketExponentStoringBucketedEntities { get; set; }
+    public BucketExponentStoringDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<BucketExponentStoringBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.HasIndex(e => e.BucketExponent);
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+
+}
+
 // Entities
 public class BasicEntity
 {
@@ -76,13 +128,87 @@ public class BasicEntity
     public string EmailAddress { get; set; } = "example@example.com";
 }
 
+public class TimestampedBucketedEntity : BucketedEntity
+{
+    public TimestampedBucketedEntity() { }
+    public TimestampedBucketedEntity(string emailAddress, int bucketExponent) : base(emailAddress, bucketExponent) { }
+    public DateTime EmailUpdated { get; set; } = DateTime.UtcNow;
+
+}
+
+public class BucketExponentStoringBucketedEntity : BucketedEntity
+{
+
+    public BucketExponentStoringBucketedEntity() { }
+    public BucketExponentStoringBucketedEntity(string emailAddress, int bucketExponent) : base(emailAddress, bucketExponent) { BucketExponent = bucketExponent; }
+    public int BucketExponent { get; set; }
+}
+
 public class BucketedEntity
 {
+    public BucketedEntity() { }
+    public BucketedEntity(string emailAddress, int bucketExponent)
+    {
+        BucketNo = 0;
+        foreach (char c in emailAddress.ToLowerInvariant())
+        {
+            BucketNo += (int)c;
+        }
+        BucketNo %= (int)Math.Pow(2, bucketExponent);
+        EmailAddress = emailAddress;
+    }
     public Guid Id { get; set; }
     public string EmailAddress { get; set; } = "example@example.com";
     public int BucketNo { get; set; } = 0;
 }
 
+public class RowCountedBasicEntity
+{
+    public int EntryNo { get; set; } = 0;
+    public Guid Id { get; set; }
+    public string EmailAddress { get; set; } = "example@example.com";
+}
+
+public class RowCountedTimestampedBucketedEntity : RowCountedBucketedEntity
+{
+    public RowCountedTimestampedBucketedEntity() { }
+    public RowCountedTimestampedBucketedEntity(string emailAddress, int bucketExponent) : base(emailAddress, bucketExponent) { }
+    public DateTime EmailUpdated { get; set; } = DateTime.UtcNow;
+
+}
+
+public class RowCountedBucketExponentStoringBucketedEntity : RowCountedBucketedEntity
+{
+
+    public RowCountedBucketExponentStoringBucketedEntity() { }
+    public RowCountedBucketExponentStoringBucketedEntity(string emailAddress, int bucketExponent) : base(emailAddress, bucketExponent) { BucketExponent = bucketExponent; }
+    public int BucketExponent { get; set; }
+}
+
+public class RowCountedBucketedEntity
+{
+    public RowCountedBucketedEntity() { }
+    public RowCountedBucketedEntity(string emailAddress, int bucketExponent)
+    {
+        BucketNo = 0;
+        foreach (char c in emailAddress.ToLowerInvariant())
+        {
+            BucketNo += (int)c;
+        }
+        BucketNo %= (int)Math.Pow(2, bucketExponent);
+        EmailAddress = emailAddress;
+    }
+    public Guid Id { get; set; }
+    public string EmailAddress { get; set; } = "example@example.com";
+    public int BucketNo { get; set; } = 0;
+    public int EntryNo { get; set; } = 0;
+}
+
+public class KeyValues
+{
+    public string Key { get; set; }
+    public int value { get; set; }
+}
 
 // Conversions
 internal static class TupleExtensions
@@ -113,6 +239,15 @@ public class PersonalDataConverter : ValueConverter<string, string>
       , default
     )
     { }
+}
+
+// non cryptographic hash functions
+public static class NonCryptographicHelpers
+{
+    public static int GetBucketExponent(int userCount)
+    {
+        return (int)Math.Floor(Math.Log2(userCount)) - 3;
+    }
 }
 
 // Encryption
