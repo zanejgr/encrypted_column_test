@@ -7,16 +7,28 @@ using static NonCryptographicHelpers;
 using static options;
 
 var rand = new Random();
-        int bucketExponent = GetBucketExponent(333);
-using (var context = new RowCountedBucketedDbContext())
+
+using (var context = new RowCountedTimestampedDbContext())
 {
     context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
     for (int i = 0; i < 333; i++)
     {
-        context.Add(new RowCountedBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+        int count = 0;
+        try{
+            count = context.RowCountedTimestampedBucketedEntity.Select(_ => _.EntryNo).Max();
+        }catch{}
+        int bucketExponent = GetBucketExponent(count);
+        if(GetBucketExponent(count) != GetBucketExponent(count - 1)){
+            foreach(var v in context.RowCountedTimestampedBucketedEntity){
+                v.EmailAddress = v.EmailAddress;
+                v.BucketNo = new BucketedEntity(v.EmailAddress, bucketExponent).BucketNo;
+                v.EmailUpdated = DateTime.UtcNow;
+            }
+        }
+        context.Add(new RowCountedTimestampedBucketedEntity($"{i}_{rand.Next()}@example.com", bucketExponent));
+        context.SaveChanges();
     }
-    context.SaveChanges();
 }
 
 
@@ -123,6 +135,53 @@ public class BucketedEncryptedDbContext : DbContext
         );
     }
 }
+
+
+public class RowCountedBucketExponentStoringDbContext : DbContext{
+    public DbSet<RowCountedBucketExponentStoringBucketedEntity> RowCountedBucketExponentStoringBucketedEntities { get; set; }
+    public RowCountedBucketExponentStoringDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RowCountedBucketExponentStoringBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.HasIndex(e => e.BucketExponent);
+
+            e.HasAlternateKey(e => e.EntryNo);
+            e.Property(e => e.EntryNo).ValueGeneratedOnAdd();
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
+public class RowCountedTimestampedDbContext : DbContext{
+    public DbSet<RowCountedTimestampedBucketedEntity> RowCountedTimestampedBucketedEntity { get; set; }
+    public RowCountedTimestampedDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RowCountedTimestampedBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+
+            e.HasAlternateKey(e => e.EntryNo);
+            e.Property(e => e.EntryNo).ValueGeneratedOnAdd();           e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailUpdated).ValueGeneratedOnAddOrUpdate();
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
 public class RowCountedBucketedDbContext : DbContext
 {
     public DbSet<RowCountedBucketedEntity> RowCountedBucketedEntities { get; set; }
