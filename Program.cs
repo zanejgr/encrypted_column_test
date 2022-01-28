@@ -245,6 +245,81 @@ public class TimestampedDbContext : DbContext{
     }
 }
 
+
+public class KeyValuedBucketExponentStoringDbContext : DbContext{
+    public DbSet<BucketExponentStoringBucketedEntity> BucketExponentStoringBucketedEntities { get; set; }
+		public DbSet<KeyValues> KeyValues { get;set;}
+    public KeyValuedBucketExponentStoringDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+				modelBuilder.Entity<KeyValues>(e => {
+						e.HasKey(k => k.Key);
+				});
+        modelBuilder.Entity<BucketExponentStoringBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.HasIndex(e => e.BucketExponent);
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
+public class KeyValuedTimestampedDbContext : DbContext{
+    public DbSet<TimestampedBucketedEntity> TimestampedBucketedEntity { get; set; }
+
+		public DbSet<KeyValues> KeyValues { get;set;}
+    public KeyValuedTimestampedDbContext() : base() { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+				modelBuilder.Entity<KeyValues>(e => {
+						e.HasKey(k => k.Key);
+				});
+        modelBuilder.Entity<TimestampedBucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+						e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailUpdated).ValueGeneratedOnAddOrUpdate();
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
+public class KeyValuedBucketedDbContext : DbContext
+{
+    public DbSet<BucketedEntity> BucketedEntities { get; set; }
+    public KeyValuedBucketedDbContext() : base() { }
+
+		public DbSet<KeyValues> KeyValues { get;set;}
+    protected override void OnConfiguring(DbContextOptionsBuilder options) => options.UseMySql(conn, srvvrs);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+				modelBuilder.Entity<KeyValues>(e => {
+						e.HasKey(k => k.Key);
+				});
+        modelBuilder.Entity<BucketedEntity>(e =>
+        {
+            e.HasIndex(e => e.EmailAddress)
+            .IsUnique();
+            e.HasIndex(e => e.BucketNo);
+            e.Property(e => e.EmailAddress)
+            .IsRequired().HasConversion<PersonalDataConverter>();
+        }
+        );
+    }
+}
+
 // Entities
 public class BasicEntity
 {
